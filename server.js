@@ -10,11 +10,13 @@ const db = mysql.createConnection(
     password: 'abc123',
     database: 'employee'
   },
-  console.log(`Connected to the employee_db database.`)
+  console.log(`Connected to the employee database.`)
 );
 
+//Launches the questions on startup
 main();
 
+//Creates the main question list
 async function main() {
   await inquirer
     .prompt(
@@ -34,6 +36,7 @@ async function main() {
         ],
       })
 
+      //Creates a table for departments, roles, and employees
     .then((answer) => {
       switch (answer.main) {
         case 'View all departments':
@@ -49,11 +52,13 @@ async function main() {
           });
           break;
         case 'View all employees':
-          db.query('SELECT * FROM employee', (err, results) => {
+          db.query('SELECT * FROM employees', (err, results) => {
             console.table(results);
             main();
           });
           break;
+
+          //Adds a department
         case 'Add a department':
           inquirer
             .prompt([
@@ -63,16 +68,15 @@ async function main() {
                 name: "newDept",
               },
             ])
+            //Creates a new department
             .then((answer) => {
-              db.query(
-                "INSERT INTO department (deptartment_name) VALUES (?)",
-                [answer.newDept],
-                (err, res) => {
-                  main();
-                }
-              );
+              db.query('INSERT INTO department (department_name) VALUES (?)', [answer.newDept], (err, results) => {
+                main();
+              });
             });
           break;
+
+          //Adds Role
         case 'Add a role':
           inquirer
             .prompt([
@@ -92,16 +96,15 @@ async function main() {
                 name: "newRoleId",
               },
             ])
+            //Uses the choices to create a new role with selected parameters
             .then((answer) => {
-              db.query(
-                "INSERT INTO department_role (title, salary, department_id) VALUES (?, ?, ?)",
-                [answer.newRole, answer.newRoleSale, answer.newRoleId],
-                (err, res) => {
-                  main();
-                }
-              );
+              db.query('INSERT INTO department_role (title, salary, department_id) VALUES (?, ?, ?)', [answer.newRole, answer.newRoleSal, answer.newRoleId], (err, results) => {
+                main();
+              });
             });
           break;
+
+            //Adds employee
         case 'Add an employee':
           inquirer
             .prompt([
@@ -126,51 +129,68 @@ async function main() {
                 name: "newEmMaId",
               },
             ])
+            //Uses the choices to create a new employee with selected parameters
             .then((answer) => {
-              db.query(
-                "INSERT INTO employee (first_name, last_name, employee_id, manager_id) VALUES (?, ?, ?, ?)",
-                [answer.newEmF, answer.newEmL, answer.newEmId, answer.newEmMaId],
-                (err, res) => {
-                  main();
-                }
-              );
+              db.query('INSERT INTO employees (first_name, last_name, role_id, manager_id) VALUES (?, ?, ?, ?)', [answer.newEmF, answer.newEmL, answer.newEmId, answer.newEmMaId], (err, results) => {
+                main();
+              });
             });
           break;
+
+        //Employee role update
         case 'Update an employee role':
-          let employees = [];
-          db.query('SELECT first_name, last_name FROM employee', (err, results) => {
-            results.forEach((element) => { employees.push(`${element.first_name} ${element.last_name}`,) });
-          });
-          let roles = [];
-          db.query('SELECT title FROM department_role', (err, results) => {
-            results.forEach((element) => { roles.push(`${element.id} ${element.title}`,) })
-          });
-          inquirer
-            .prompt([
-              {
-                type: "list",
-                message: "Choose employee to update:",
-                name: employees,
-              },
-              {
-                type: "list",
-                message: "Choose new roll:",
-                name: roles,
-              },
-            ])
-            .then((answer) => {
-              db.query(
-                "UPDATE employee SET role_id(, manager_id) VALUES (?, ?, ?, ?)",
-                [answer.newEmF, answer.newEmL, answer.newEmId, answer.newEmMaId],
-                (err, res) => {
-                  main();
-                }
-              );
-            });
+          //Gets all employees and sets them as the choices
+          db.query('SELECT * FROM employees', (err, results) => {
+            const employees = results.map(({ id, first_name, last_name }) => ({ name: first_name + " " + last_name, value: id }));
+            inquirer
+              .prompt([
+                {
+                  type: "list",
+                  message: "Select employee to update:",
+                  name: "employee",
+                  choices: employees,
+                },
+              ])
+              //pushes the selected employees id to an array
+              .then((answer) => {
+                const em = answer.employee;
+                const roleChange = [];
+                roleChange.push(em);
+
+                //Gets all role and sets them as the choices
+                db.query('SELECT * FROM department_role', (err, results) => {
+                  const role = results.map(({ id, title }) => ({ name: title, value: id }));
+                  inquirer
+                    .prompt([
+                      {
+                        type: "list",
+                        message: "Select new employee position:",
+                        name: "newRole",
+                        choices: role,
+                      },
+                    ])
+                    .then((answer) => {
+                      //Pushes the selected role id to the array holding the selected employee id
+                      const ro = answer.newRole;
+                      roleChange.push(ro);
+
+                      //Rearranges the ids in the array so they are in the proper order to update
+                      let em = roleChange[0]
+                      roleChange[0] = ro
+                      roleChange[1] = em
+
+                      db.query('UPDATE employees SET role_id = ? WHERE id = ?', roleChange, (err, results) => {
+                        main();
+                      })
+                    });
+                })
+              });
+          })
           break;
+
+          //Exits the program
         case 'Exit':
           process.exit();
       };
     });
 };
-
